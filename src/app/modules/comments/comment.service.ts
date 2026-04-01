@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import AppError from '../../errors/AppError.js';
 import { Post } from '../posts/post.model.js';
 import { Comment } from './comment.model.js';
@@ -10,45 +11,63 @@ const createCommentIntoDB = async (
     postId: string;
   },
 ) => {
-  const post = await Post.findById(payload.postId);
+  const session = await mongoose.startSession();
+  let commentId: string | undefined;
 
-  if (!post) {
-    throw new AppError(404, 'Post not found.');
-  }
+  try {
+    await session.withTransaction(async () => {
+      const post = await Post.findById(payload.postId).session(session);
 
-  if (post.visibility === 'private' && post.author.toString() !== userId) {
-    throw new AppError(403, 'You are not allowed to comment on this post.');
-  }
+      if (!post) {
+        throw new AppError(404, 'Post not found.');
+      }
 
-  if (payload.parentCommentId) {
-    const parentComment = await Comment.findOne({
-      _id: payload.parentCommentId,
-      post: payload.postId,
+      if (post.visibility === 'private' && post.author.toString() !== userId) {
+        throw new AppError(403, 'You are not allowed to comment on this post.');
+      }
+
+      if (payload.parentCommentId) {
+        const parentComment = await Comment.findOne({
+          _id: payload.parentCommentId,
+          post: payload.postId,
+        }).session(session);
+
+        if (!parentComment) {
+          throw new AppError(404, 'Parent comment not found.');
+        }
+
+        await Comment.updateOne(
+          { _id: payload.parentCommentId },
+          { $inc: { replyCount: 1 } },
+          { session },
+        );
+      }
+
+      const comment = await Comment.create(
+        [
+          {
+            author: userId,
+            content: payload.content,
+            parentComment: payload.parentCommentId,
+            post: payload.postId,
+          },
+        ],
+        { session },
+      );
+
+      commentId = comment[0]._id.toString();
+
+      await Post.updateOne(
+        { _id: payload.postId },
+        { $inc: { commentCount: 1 } },
+        { session },
+      );
     });
-
-    if (!parentComment) {
-      throw new AppError(404, 'Parent comment not found.');
-    }
+  } finally {
+    await session.endSession();
   }
 
-  const comment = await Comment.create({
-    author: userId,
-    content: payload.content,
-    parentComment: payload.parentCommentId,
-    post: payload.postId,
-  });
-
-  await Post.findByIdAndUpdate(payload.postId, {
-    $inc: { commentCount: 1 },
-  });
-
-  if (payload.parentCommentId) {
-    await Comment.findByIdAndUpdate(payload.parentCommentId, {
-      $inc: { replyCount: 1 },
-    });
-  }
-
-  return Comment.findById(comment._id).populate('author', 'firstName lastName email profilePicture');
+  return Comment.findById(commentId).populate('author', 'firstName lastName email profilePicture');
 };
 
 const getCommentsByPostFromDB = async (userId: string, postId: string) => {
