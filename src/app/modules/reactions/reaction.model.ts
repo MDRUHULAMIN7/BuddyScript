@@ -28,5 +28,6 @@ const reactionSchema = new Schema<TReaction, ReactionModel>(
 );
 
 reactionSchema.index({ user: 1, targetId: 1, targetType: 1 }, { unique: true });
+reactionSchema.index({ targetId: 1, targetType: 1, createdAt: -1, _id: -1 });
 
 export const Reaction = model<TReaction, ReactionModel>('Reaction', reactionSchema);

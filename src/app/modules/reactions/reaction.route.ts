@@ -5,7 +5,8 @@ import { reactionControllers } from './reaction.controller.js';
 const router = express.Router();
 
 router.use(auth);
-router.post('/toggle', reactionControllers.toggleReaction);
-router.get('/', reactionControllers.getReactionsByTarget);
+router.put('/:targetType/:targetId', reactionControllers.likeReaction);
+router.delete('/:targetType/:targetId', reactionControllers.unlikeReaction);
+router.get('/:targetType/:targetId', reactionControllers.getReactionsByTarget);
 
 export const ReactionRoutes = router;

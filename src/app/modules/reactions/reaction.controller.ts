@@ -1,24 +1,37 @@
 import type { Request, Response } from 'express';
 import catchAsync from '../../utils/catchAsync.js';
 import sendResponse from '../../utils/sendResponse.js';
-import { reactionQueryValidationSchema, toggleReactionValidationSchema } from './reaction.validation.js';
+import { reactionQueryValidationSchema, reactionTargetValidationSchema } from './reaction.validation.js';
 import { reactionServices } from './reaction.service.js';
 
-const toggleReaction = catchAsync(async (req: Request, res: Response) => {
-  const payload = toggleReactionValidationSchema.parse(req.body);
-  const result = await reactionServices.toggleReactionIntoDB(req.user!.userId, payload);
+const likeReaction = catchAsync(async (req: Request, res: Response) => {
+  const payload = reactionTargetValidationSchema.parse(req.params);
+  const result = await reactionServices.addReactionIntoDB(req.user!.userId, payload);
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: 'Reaction state updated successfully.',
+    message: 'Reaction added successfully.',
+    data: result,
+  });
+});
+
+const unlikeReaction = catchAsync(async (req: Request, res: Response) => {
+  const payload = reactionTargetValidationSchema.parse(req.params);
+  const result = await reactionServices.removeReactionFromDB(req.user!.userId, payload);
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Reaction removed successfully.',
     data: result,
   });
 });
 
 const getReactionsByTarget = catchAsync(async (req: Request, res: Response) => {
-  const payload = reactionQueryValidationSchema.parse(req.query);
-  const result = await reactionServices.getReactionsByTargetFromDB(req.user!.userId, payload);
+  const payload = reactionTargetValidationSchema.parse(req.params);
+  const pagination = reactionQueryValidationSchema.parse(req.query);
+  const result = await reactionServices.getReactionsByTargetFromDB(req.user!.userId, payload, pagination);
 
   sendResponse(res, {
     statusCode: 200,
@@ -30,5 +43,6 @@ const getReactionsByTarget = catchAsync(async (req: Request, res: Response) => {
 
 export const reactionControllers = {
   getReactionsByTarget,
-  toggleReaction,
+  likeReaction,
+  unlikeReaction,
 };

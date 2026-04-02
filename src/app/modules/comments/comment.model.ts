@@ -46,5 +46,6 @@ const commentSchema = new Schema<TComment, CommentModel>(
 
 commentSchema.index({ post: 1, createdAt: 1 });
 commentSchema.index({ parentComment: 1, createdAt: 1 });
+commentSchema.index({ post: 1, parentComment: 1, createdAt: -1, _id: -1 });
 
 export const Comment = model<TComment, CommentModel>('Comment', commentSchema);

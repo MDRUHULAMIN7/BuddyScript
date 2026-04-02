@@ -3,12 +3,16 @@ import cors from 'cors';
 import router from './app/routes/index.js';
 import notFound from './app/middlewares/notFound.js';
 import globalErrorHandler from './app/middlewares/globalErrorHandler.js';
+import path from 'path';
 
 const app: Application = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+
+// Serve uploaded media (created via multer in `uploadPostImage`).
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({

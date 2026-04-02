@@ -1,6 +1,9 @@
 import AppError from '../../errors/AppError.js';
 import { User } from '../users/user.model.js';
 import { Post } from './post.model.js';
+import mongoose from 'mongoose';
+import { decodeCursor, encodeCursor } from '../../utils/cursor.js';
+import { Reaction } from '../reactions/reaction.model.js';
 
 const createPostIntoDB = async (
   userId: string,
@@ -28,30 +31,111 @@ const createPostIntoDB = async (
 
 const getFeedFromDB = async (
   userId: string,
-  pagination: { limit: number; page: number },
+  pagination: { limit: number; cursor?: string; page?: number },
 ) => {
-  const skip = (pagination.page - 1) * pagination.limit;
-  const filter = {
-    $or: [{ visibility: 'public' }, { author: userId }],
+  const baseFilter = { $or: [{ visibility: 'public' }, { author: userId }] };
+
+  const attachLikedByMe = async (posts: Array<{ _id: unknown }>) => {
+    if (posts.length === 0) return posts;
+
+    const postIds = posts.map((p) => (p._id as mongoose.Types.ObjectId).toString());
+    const reactions = await Reaction.find({
+      user: userId,
+      targetType: 'post',
+      targetId: { $in: postIds },
+    })
+      .select('targetId')
+      .lean();
+
+    const likedSet = new Set(reactions.map((r) => r.targetId.toString()));
+
+    return posts.map((p) => ({
+      ...p,
+      likedByMe: likedSet.has((p._id as mongoose.Types.ObjectId).toString()),
+    }));
   };
 
-  const [posts, total] = await Promise.all([
-    Post.find(filter)
+  // Cursor-based pagination: fast even for deep pages.
+  const getCursorPage = async (cursor?: string) => {
+    const filter = cursor
+      ? (() => {
+          const decoded = decodeCursor(cursor);
+          const createdAt = new Date(decoded.createdAt);
+          const id = new mongoose.Types.ObjectId(decoded.id);
+
+          return {
+            $and: [
+              baseFilter,
+              {
+                $or: [
+                  { createdAt: { $lt: createdAt } },
+                  { createdAt, _id: { $lt: id } },
+                ],
+              },
+            ],
+          };
+        })()
+      : baseFilter;
+
+    const posts = await Post.find(filter)
       .populate('author', 'firstName lastName email profilePicture')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(pagination.limit + 1)
+      .lean();
+
+    const hasNextPage = posts.length > pagination.limit;
+    const pagePosts = hasNextPage ? posts.slice(0, pagination.limit) : posts;
+
+    const postsWithLikes = await attachLikedByMe(pagePosts);
+
+    const nextCursor = hasNextPage
+      ? encodeCursor({
+          createdAt: pagePosts[pagePosts.length - 1]!.createdAt!.getTime(),
+          id: pagePosts[pagePosts.length - 1]!._id.toString(),
+        })
+      : null;
+
+    return {
+      meta: {
+        limit: pagination.limit,
+        hasNextPage,
+        nextCursor,
+      },
+      posts: postsWithLikes,
+    };
+  };
+
+  // Prefer cursor pagination; fall back to legacy skip/limit for older clients.
+  if (pagination.cursor) {
+    return getCursorPage(pagination.cursor);
+  }
+
+  const page = pagination.page ?? 1;
+  if (page === 1) {
+    return getCursorPage(undefined);
+  }
+
+  const skip = (page - 1) * pagination.limit;
+  const [posts, total] = await Promise.all([
+    Post.find(baseFilter)
+      .populate('author', 'firstName lastName email profilePicture')
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
-      .limit(pagination.limit),
-    Post.countDocuments(filter),
+      .limit(pagination.limit)
+      .lean(),
+    Post.countDocuments(baseFilter),
   ]);
+
+  const postsWithLikes = await attachLikedByMe(posts);
 
   return {
     meta: {
       limit: pagination.limit,
-      page: pagination.page,
+      page,
       total,
       totalPages: Math.ceil(total / pagination.limit),
     },
-    posts,
+    posts: postsWithLikes,
   };
 };
 
@@ -69,7 +153,16 @@ const getSinglePostFromDB = async (userId: string, postId: string) => {
     throw new AppError(403, 'You are not allowed to access this post.');
   }
 
-  return post;
+  const liked = await Reaction.exists({
+    user: userId,
+    targetType: 'post',
+    targetId: post._id,
+  });
+
+  return {
+    ...post.toObject(),
+    likedByMe: Boolean(liked),
+  };
 };
 
 export const postServices = {

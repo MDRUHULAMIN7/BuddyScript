@@ -17,14 +17,14 @@ const createComment = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getCommentsByPost = catchAsync(async (req: Request, res: Response) => {
-  const { postId } = commentQueryValidationSchema.parse(req.query);
-  const comments = await commentServices.getCommentsByPostFromDB(req.user!.userId, postId);
+  const payload = commentQueryValidationSchema.parse(req.query);
+  const result = await commentServices.getCommentsByPostFromDB(req.user!.userId, payload);
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: 'Comments retrieved successfully.',
-    data: comments,
+    data: result,
   });
 });
 

@@ -43,5 +43,6 @@ const postSchema = new Schema<TPost, PostModel>(
 
 postSchema.index({ createdAt: -1 });
 postSchema.index({ author: 1, visibility: 1, createdAt: -1 });
+postSchema.index({ createdAt: -1, _id: -1 });
 
 export const Post = model<TPost, PostModel>('Post', postSchema);

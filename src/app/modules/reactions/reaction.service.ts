@@ -3,6 +3,7 @@ import AppError from '../../errors/AppError.js';
 import { Comment } from '../comments/comment.model.js';
 import { Post } from '../posts/post.model.js';
 import { Reaction } from './reaction.model.js';
+import { decodeCursor, encodeCursor } from '../../utils/cursor.js';
 
 const isDuplicateKeyError = (error: unknown) => {
   return (
@@ -66,29 +67,27 @@ const updateTargetReactionCount = async (
   await Comment.updateOne({ _id: targetId }, { $inc: { reactionCount: delta } }, { session });
 };
 
-const toggleReactionIntoDB = async (
+const addReactionIntoDB = async (
   userId: string,
   payload: { targetId: string; targetType: 'comment' | 'post' },
 ) => {
   const session = await mongoose.startSession();
-  let liked = false;
+  let changed = false;
+  let liked = true;
 
   try {
     await session.withTransaction(async () => {
       await resolveTarget(userId, payload.targetType, payload.targetId, session);
 
-      const deletedReaction = await Reaction.findOneAndDelete(
+      const existingReaction = await Reaction.findOne(
         {
           targetId: payload.targetId,
           targetType: payload.targetType,
           user: userId,
         },
-        { session },
-      );
+      ).session(session);
 
-      if (deletedReaction) {
-        await updateTargetReactionCount(payload.targetType, payload.targetId, -1, session);
-        liked = false;
+      if (existingReaction) {
         return;
       }
 
@@ -104,7 +103,7 @@ const toggleReactionIntoDB = async (
       );
 
       await updateTargetReactionCount(payload.targetType, payload.targetId, 1, session);
-      liked = true;
+      changed = true;
     });
   } catch (error) {
     if (!isDuplicateKeyError(error)) {
@@ -123,6 +122,45 @@ const toggleReactionIntoDB = async (
   }
 
   return {
+    changed,
+    liked,
+  };
+};
+
+const removeReactionFromDB = async (
+  userId: string,
+  payload: { targetId: string; targetType: 'comment' | 'post' },
+) => {
+  const session = await mongoose.startSession();
+  let changed = false;
+  const liked = false;
+
+  try {
+    await session.withTransaction(async () => {
+      await resolveTarget(userId, payload.targetType, payload.targetId, session);
+
+      const deletedReaction = await Reaction.findOneAndDelete(
+        {
+          targetId: payload.targetId,
+          targetType: payload.targetType,
+          user: userId,
+        },
+        { session },
+      );
+
+      if (!deletedReaction) {
+        return;
+      }
+
+      await updateTargetReactionCount(payload.targetType, payload.targetId, -1, session);
+      changed = true;
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return {
+    changed,
     liked,
   };
 };
@@ -130,18 +168,61 @@ const toggleReactionIntoDB = async (
 const getReactionsByTargetFromDB = async (
   userId: string,
   payload: { targetId: string; targetType: 'comment' | 'post' },
+  pagination: { limit: number; cursor?: string },
 ) => {
   await resolveTarget(userId, payload.targetType, payload.targetId);
 
-  return Reaction.find({
-    targetId: payload.targetId,
-    targetType: payload.targetType,
-  })
-    .populate('user', 'firstName lastName email profilePicture')
-    .sort({ createdAt: -1 });
+  const baseFilter = { targetId: payload.targetId, targetType: payload.targetType };
+
+  const filter = pagination.cursor
+    ? (() => {
+        const decoded = decodeCursor(pagination.cursor!);
+        const createdAt = new Date(decoded.createdAt);
+        const id = new mongoose.Types.ObjectId(decoded.id);
+
+        return {
+          $and: [
+            baseFilter,
+            {
+              $or: [
+                { createdAt: { $lt: createdAt } },
+                { createdAt, _id: { $lt: id } },
+              ],
+            },
+          ],
+        };
+      })()
+    : baseFilter;
+
+  const reactions = await Reaction.find(filter)
+    .select('_id user createdAt')
+    .populate('user', 'firstName lastName profilePicture')
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(pagination.limit + 1)
+    .lean();
+
+  const hasNextPage = reactions.length > pagination.limit;
+  const pageReactions = hasNextPage ? reactions.slice(0, pagination.limit) : reactions;
+
+  const nextCursor = hasNextPage
+    ? encodeCursor({
+        createdAt: pageReactions[pageReactions.length - 1]!.createdAt!.getTime(),
+        id: pageReactions[pageReactions.length - 1]!._id.toString(),
+      })
+    : null;
+
+  return {
+    meta: {
+      limit: pagination.limit,
+      hasNextPage,
+      nextCursor,
+    },
+    reactions: pageReactions,
+  };
 };
 
 export const reactionServices = {
+  addReactionIntoDB,
   getReactionsByTargetFromDB,
-  toggleReactionIntoDB,
+  removeReactionFromDB,
 };
