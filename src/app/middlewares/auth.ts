@@ -10,13 +10,16 @@ type TAccessTokenPayload = JwtPayload & {
 
 const auth = (req: Request, _res: Response, next: NextFunction) => {
   const authorization = req.headers.authorization;
+  const cookieToken = req.cookies?.[config.authCookieName];
+  const headerToken = authorization?.startsWith('Bearer ')
+    ? authorization.split(' ')[1]
+    : undefined;
+  const token = cookieToken ?? headerToken;
 
-  if (!authorization?.startsWith('Bearer ')) {
+  if (!token) {
     next(new AppError(401, 'Authorization token is required.'));
     return;
   }
-
-  const token = authorization.split(' ')[1];
 
   try {
     const decoded = jwt.verify(token, config.jwtAccessSecret) as TAccessTokenPayload;
