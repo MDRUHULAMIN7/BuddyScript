@@ -29,13 +29,18 @@ const durationToMs = (duration: string) => {
   }
 };
 
-const buildAuthCookieOptions = () => ({
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: config.nodeEnv === 'production',
-  maxAge: durationToMs(config.jwtAccessExpiresIn),
-  path: '/',
-});
+const buildAuthCookieOptions = () => {
+  const isProduction = config.nodeEnv === 'production';
+  const sameSite: 'lax' | 'none' = isProduction ? 'none' : 'lax';
+
+  return {
+    httpOnly: true,
+    sameSite,
+    secure: isProduction,
+    maxAge: durationToMs(config.jwtAccessExpiresIn),
+    path: '/',
+  };
+};
 
 const register = catchAsync(async (req: Request, res: Response) => {
   const payload = registerValidationSchema.parse(req.body);
@@ -71,10 +76,12 @@ const login = catchAsync(async (req: Request, res: Response) => {
 });
 
 const logout = catchAsync(async (_req: Request, res: Response) => {
+  const isProduction = config.nodeEnv === 'production';
+
   res.clearCookie(config.authCookieName, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: config.nodeEnv === 'production',
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
     path: '/',
   });
 
