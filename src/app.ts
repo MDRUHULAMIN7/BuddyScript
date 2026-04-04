@@ -9,7 +9,7 @@ import { connectToDatabase } from './app/config/database.js';
 const app: Application = express();
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://your-frontend-domain.vercel.app',
+  'https://buddy-script-frontend-beryl.vercel.app',
 ];
 
 app.use(express.json());
