@@ -1,10 +1,10 @@
 import app from './app.js';
 import config from './app/config/index.js';
-import mongoose from 'mongoose';
+import { connectToDatabase } from './app/config/database.js';
 
 async function main() {
   try {
-    await mongoose.connect(config.databaseUrl);
+    await connectToDatabase();
     app.listen(config.port, () => {
       console.log(`BuddyScript backend listening on port ${config.port}`);
     });

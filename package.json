@@ -5,10 +5,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/server.ts",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
+    "lint": "eslint src api",
+    "lint:fix": "eslint src api --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "start": "node ./dist/server.js"
+    "start": "node ./dist/src/server.js"
   },
   "license": "ISC",
   "type": "module",
@@ -16,6 +16,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/multer": "^2.1.0",
     "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.9.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

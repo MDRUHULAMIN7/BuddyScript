@@ -10,7 +10,7 @@ export const createPostValidationSchema = z
       .refine((value) => {
         if (!value) return true;
         try {
-          // Accept absolute URLs (user-provided)...
+          // Accept absolute URLs (Cloudinary or user-provided)...
           new URL(value);
           return true;
         } catch {

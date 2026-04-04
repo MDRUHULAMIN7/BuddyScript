@@ -3,15 +3,17 @@ import catchAsync from '../../utils/catchAsync.js';
 import sendResponse from '../../utils/sendResponse.js';
 import { createPostValidationSchema, feedQueryValidationSchema } from './post.validation.js';
 import { postServices } from './post.service.js';
+import { uploadImageToCloudinary } from '../../config/cloudinary.js';
 
 const createPost = catchAsync(async (req: Request, res: Response) => {
   const uploadedFile = (req as unknown as { file?: Express.Multer.File }).file;
+  const cloudinaryImageUrl = uploadedFile
+    ? await uploadImageToCloudinary(uploadedFile)
+    : req.body.imageUrl;
 
-  // If the request contains an uploaded file, we convert it into the stored `imageUrl`.
-  // Otherwise we keep the user-provided `imageUrl` (URL or local upload path).
   const payload = createPostValidationSchema.parse({
     ...req.body,
-    imageUrl: uploadedFile ? `/uploads/posts/${uploadedFile.filename}` : req.body.imageUrl,
+    imageUrl: cloudinaryImageUrl,
   });
 
   const post = await postServices.createPostIntoDB(req.user!.userId, payload);

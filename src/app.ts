@@ -3,9 +3,9 @@ import cors from 'cors';
 import router from './app/routes/index.js';
 import notFound from './app/middlewares/notFound.js';
 import globalErrorHandler from './app/middlewares/globalErrorHandler.js';
-import path from 'path';
 import cookieParser from 'cookie-parser';
 import config from './app/config/index.js';
+import { connectToDatabase } from './app/config/database.js';
 
 const app: Application = express();
 
@@ -26,8 +26,14 @@ app.use(
   }),
 );
 
-// Serve uploaded media (created via multer in `uploadPostImage`).
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+app.use(async (_req, _res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
