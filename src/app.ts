@@ -4,10 +4,13 @@ import router from './app/routes/index.js';
 import notFound from './app/middlewares/notFound.js';
 import globalErrorHandler from './app/middlewares/globalErrorHandler.js';
 import cookieParser from 'cookie-parser';
-import config from './app/config/index.js';
 import { connectToDatabase } from './app/config/database.js';
 
 const app: Application = express();
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://your-frontend-domain.vercel.app',
+];
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -15,7 +18,7 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || config.frontendUrls.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
