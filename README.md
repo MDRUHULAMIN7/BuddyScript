@@ -9,7 +9,7 @@ Backend API for BuddyScript, a social feed application built with Express, TypeS
 - Live API base URL: [https://buddy-script-umber.vercel.app/api/v1](https://buddy-script-umber.vercel.app/api/v1)
 - Health check: [https://buddy-script-umber.vercel.app/api/v1/health](https://buddy-script-umber.vercel.app/api/v1/health)
 - Live frontend consuming this API: [https://buddy-script-frontend-beryl.vercel.app](https://buddy-script-frontend-beryl.vercel.app)
-- Video walkthrough: add your unlisted/private YouTube link here before submission
+- Video walkthrough: https://youtu.be/BPAlDkaMrnI
 
 ## What I Built
 
